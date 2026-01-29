@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Iframe Auto Scroll</title>
+
+    <style>
+        html, body {
+            margin: 0;
+            height: 100%;
+            overflow: hidden;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: 0;
+        }
+    </style>
+</head>
+<body>
+
+<iframe id="preview" src="https://www.google.com/search?q=brasil"></iframe>
+
+<script>
+    const iframe = document.getElementById('preview')
+
+    const easeInOut = (t) => (t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2)
+
+    const animate = ({ from, to, durationMs, onUpdate, onComplete }) => {
+        const start = performance.now()
+
+        const step = (now) => {
+            const t = Math.min(1, (now - start) / durationMs)
+            const v = from + (to - from) * easeInOut(t)
+            onUpdate(v)
+            if (t < 1) requestAnimationFrame(step)
+            else if (onComplete) onComplete()
+        }
+
+        requestAnimationFrame(step)
+    }
+
+    const showBlockedMessage = () => {
+        const el = document.createElement('div')
+        el.style.position = 'fixed'
+        el.style.inset = '12px'
+        el.style.zIndex = '9999'
+        el.style.display = 'flex'
+        el.style.alignItems = 'center'
+        el.style.justifyContent = 'center'
+        el.style.background = 'rgba(0,0,0,0.75)'
+        el.style.color = '#fff'
+        el.style.fontFamily = 'Arial, sans-serif'
+        el.style.fontSize = '16px'
+        el.style.borderRadius = '12px'
+        el.style.textAlign = 'center'
+        el.style.padding = '16px'
+        el.textContent = 'Acesso ao iframe bloqueado em file://. Abra via servidor (http://) para o auto scroll funcionar.'
+        document.body.appendChild(el)
+    }
+
+    const startIframeAutoScroll = ({ durationMs }) => {
+        const win = iframe.contentWindow
+        const doc = iframe.contentDocument
+        const scrollEl = doc && (doc.scrollingElement || doc.documentElement || doc.body)
+        if (!win || !scrollEl) throw new Error('iframe scroll context unavailable')
+
+        const getMaxScroll = () => Math.max(0, scrollEl.scrollHeight - win.innerHeight)
+
+        const scrollDown = () => {
+            const from = win.scrollY
+            const to = getMaxScroll()
+            animate({
+                from,
+                to,
+                durationMs,
+                onUpdate: (v) => win.scrollTo(0, v),
+                onComplete: scrollUp
+            })
+        }
+
+        const scrollUp = () => {
+            const from = win.scrollY
+            animate({
+                from,
+                to: 0,
+                durationMs,
+                onUpdate: (v) => win.scrollTo(0, v),
+                onComplete: scrollDown
+            })
+        }
+
+        setTimeout(scrollDown, 200)
+    }
+
+    iframe.addEventListener('load', () => {
+        try {
+            startIframeAutoScroll({ durationMs: 8000 })
+        } catch (e) {
+            showBlockedMessage()
+        }
+    })
+</script>
+
+</body>
+</html>
