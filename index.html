@@ -20,7 +20,7 @@
 </head>
 <body>
 
-<iframe id="preview" src="https://www.google.com/search?q=brasil"></iframe>
+<iframe id="preview" src="https://google.com"></iframe>
 
 <script>
     const iframe = document.getElementById('preview')
@@ -41,7 +41,7 @@
         requestAnimationFrame(step)
     }
 
-    const showBlockedMessage = () => {
+    const showBlockedMessage = (message) => {
         const el = document.createElement('div')
         el.style.position = 'fixed'
         el.style.inset = '12px'
@@ -56,15 +56,25 @@
         el.style.borderRadius = '12px'
         el.style.textAlign = 'center'
         el.style.padding = '16px'
-        el.textContent = 'Acesso ao iframe bloqueado em file://. Abra via servidor (http://) para o auto scroll funcionar.'
+        el.textContent = message
         document.body.appendChild(el)
     }
 
-    const startIframeAutoScroll = ({ durationMs }) => {
+    const getScrollContext = () => {
         const win = iframe.contentWindow
-        const doc = iframe.contentDocument
+        let doc
+        try {
+            doc = iframe.contentDocument
+        } catch (e) {
+            doc = null
+        }
         const scrollEl = doc && (doc.scrollingElement || doc.documentElement || doc.body)
-        if (!win || !scrollEl) throw new Error('iframe scroll context unavailable')
+        return { win, doc, scrollEl }
+    }
+
+    const startIframeAutoScroll = ({ durationMs }) => {
+        const { win, scrollEl } = getScrollContext()
+        if (!win || !scrollEl) throw new Error('scroll_context_unavailable')
 
         const getMaxScroll = () => Math.max(0, scrollEl.scrollHeight - win.innerHeight)
 
@@ -95,11 +105,33 @@
     }
 
     iframe.addEventListener('load', () => {
-        try {
-            startIframeAutoScroll({ durationMs: 8000 })
-        } catch (e) {
-            showBlockedMessage()
+        const startedAt = performance.now()
+
+        const tryStart = () => {
+            try {
+                startIframeAutoScroll({ durationMs: 8000 })
+                return
+            } catch (e) {
+                const { doc } = getScrollContext()
+                const isCrossOrigin = !doc
+                const src = iframe.getAttribute('src') || ''
+                if (isCrossOrigin) {
+                    showBlockedMessage(
+                        `Não dá pra controlar o scroll de iframe cross-origin por JS (segurança do navegador). src=${src} origin=${location.origin}`
+                    )
+                    return
+                }
+
+                if (performance.now() - startedAt < 1200) {
+                    setTimeout(tryStart, 50)
+                    return
+                }
+
+                showBlockedMessage(`Falha ao iniciar scroll do iframe. src=${src} origin=${location.origin}`)
+            }
         }
+
+        tryStart()
     })
 </script>
 
